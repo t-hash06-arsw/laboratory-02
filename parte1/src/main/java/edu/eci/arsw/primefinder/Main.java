@@ -4,8 +4,16 @@ public class Main {
 
 	public static void main(String[] args) {
 
-		PrimeFinderThread pft = new PrimeFinderThread(0, 50_000_000);
+		int threadCount = 100;
+		int finalNumber = 100_000_000;
+		int range = finalNumber / threadCount;
+		PrimeFinderThread[] threads = new PrimeFinderThread[threadCount];
 
-		pft.start();
+		for (int i = 0; i < threadCount; i++) {
+			int start = i * range;
+			int end = (i == threadCount - 1) ? finalNumber : (start + range - 1);
+			threads[i] = new PrimeFinderThread(start, end, "Thread-" + i);
+			threads[i].start();
+		}
 	}
 }
