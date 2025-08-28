@@ -21,4 +21,16 @@ public class RegistroLlegada {
 	public void setUltimaPosicionAlcanzada(int ultimaPosicionAlcanzada) {
 		this.ultimaPosicionAlcanzada = ultimaPosicionAlcanzada;
 	}
+
+	public synchronized int tomarYAvanzarPosicion() {
+		int actual = ultimaPosicionAlcanzada;
+		ultimaPosicionAlcanzada = actual + 1;
+		return actual;
+	}
+
+	public synchronized void intentarRegistrarGanador(String nombre, int posicion) {
+		if (posicion == 1 && ganador == null) {
+			ganador = nombre;
+		}
+	}
 }
