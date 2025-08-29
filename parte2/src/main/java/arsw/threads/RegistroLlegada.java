@@ -6,6 +6,10 @@ public class RegistroLlegada {
 
 	private String ganador = null;
 
+	private boolean pausado = false;
+
+	private final Object monitor = new Object();
+
 	public String getGanador() {
 		return ganador;
 	}
@@ -31,6 +35,27 @@ public class RegistroLlegada {
 	public synchronized void intentarRegistrarGanador(String nombre, int posicion) {
 		if (posicion == 1 && ganador == null) {
 			ganador = nombre;
+		}
+	}
+
+	public void pausar() {
+		synchronized (monitor) {
+			pausado = true;
+		}
+	}
+
+	public void continuar() {
+		synchronized (monitor) {
+			pausado = false;
+			monitor.notifyAll();
+		}
+	}
+
+	public void esperarSiPausado() throws InterruptedException {
+		synchronized (monitor) {
+			while (pausado) {
+				monitor.wait();
+			}
 		}
 	}
 }

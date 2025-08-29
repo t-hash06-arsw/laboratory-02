@@ -20,6 +20,7 @@ public class Galgo extends Thread {
 
 	public void corra() throws InterruptedException {
 		while (paso < carril.size()) {
+			regl.esperarSiPausado();
 			Thread.sleep(100);
 			carril.setPasoOn(paso++);
 			carril.displayPasos(paso);

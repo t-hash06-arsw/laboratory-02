@@ -58,6 +58,7 @@ public class MainCanodromo {
                 new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
+                        reg.pausar();
                         System.out.println("Carrera pausada!");
                     }
                 });
@@ -66,6 +67,7 @@ public class MainCanodromo {
                 new ActionListener() {
                     @Override
                     public void actionPerformed(ActionEvent e) {
+                        reg.continuar();
                         System.out.println("Carrera reanudada!");
                     }
                 });
