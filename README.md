@@ -15,6 +15,43 @@ Creación, puesta en marcha y coordinación de hilos.
 3. Lo que se le ha pedido es: debe modificar la aplicación de manera que cuando hayan transcurrido 5 segundos desde que se inició la ejecución, se detengan todos los hilos y se muestre el número de primos encontrados hasta el momento. Luego, se debe esperar a que el usuario presione ENTER para reanudar la ejecución de los mismo.
 
 
+Solución Parte I
+
+- Archivos clave:
+    - `parte1/src/main/java/edu/eci/arsw/primefinder/Main.java`
+    - `parte1/src/main/java/edu/eci/arsw/primefinder/PrimeFinderThread.java`
+
+1) Verificación inicial de uso de núcleos
+- Se ejecutó la versión base y se observó el uso de CPU con el monitor del sistema. Con un único hilo, el proceso usa esencialmente 1 núcleo lógico.
+
+2) Paralelización con 3 hilos
+- En `Main.java` se configuró `threadCount = 3` y se dividió el rango [0, 30.000.000] en tercios, asignando a cada hilo su sub-rango. Cada hilo instancia `PrimeFinderThread(start, end, "Hilo-i")` y se inicia con `start()`.
+- Resultado: ahora se observan 3 hilos de cómputo trabajando en paralelo, aprovechando múltiples núcleos del equipo.
+
+3) Pausa a los 5 segundos, reporte parcial y reanudación con ENTER
+- En `Main.java` se agregó lógica para:
+    - Dormir el hilo principal 5s (`Thread.sleep(5000)`),
+    - Pausar todos los hilos de cómputo llamando a `PrimeFinderThread.pausarTodos()`,
+    - Sumar el tamaño de las listas parciales de primos de cada hilo (`t.getPrimes().size()`) y mostrar el total parcial,
+    - Esperar un ENTER por consola,
+    - Reanudar la ejecución con `PrimeFinderThread.continuarTodos()` y luego hacer `join()` a los hilos para esperar su finalización.
+- En `PrimeFinderThread.java` se implementó un monitor global con `wait/notifyAll`:
+    - Campos estáticos: `pausado` y `monitor` para coordinar todos los hilos.
+    - En el bucle de búsqueda se llama a `esperarSiPausado()` en cada iteración, que bloquea el hilo mientras `pausado` sea `true`.
+    - Métodos estáticos `pausarTodos()` y `continuarTodos()` cambian el estado y notifican a todos los hilos.
+
+Cómo ejecutar Parte I
+
+- Construir y ejecutar desde `parte1/`:
+
+    mvn -DskipTests package
+    java -cp target/primesearch-1.0-SNAPSHOT.jar edu.eci.arsw.primefinder.Main
+
+- Comportamiento esperado:
+    - Tras 5s se imprime el total parcial de primos encontrados y el programa queda esperando ENTER.
+    - Al presionar ENTER, los hilos continúan hasta terminar y se imprime el total final de primos.
+
+
 
 #####Parte II 
 
@@ -59,6 +96,62 @@ Taller.
     cuando se haga clic en ‘Stop’, todos los hilos de los galgos
     deberían dormirse, y cuando se haga clic en ‘Continue’ los mismos
     deberían despertarse y continuar con la carrera. Diseñe una solución que permita hacer esto utilizando los mecanismos de sincronización con las primitivas de los Locks provistos por el lenguaje (wait y notifyAll).
+
+
+Solución Parte II
+
+- Archivos clave:
+    - `parte2/src/main/java/arsw/threads/MainCanodromo.java`
+    - `parte2/src/main/java/arsw/threads/RegistroLlegada.java`
+    - `parte2/src/main/java/arsw/threads/Galgo.java`
+
+1) Mostrar resultados solo al finalizar todos los galgos
+- En `MainCanodromo.java`, dentro del hilo que arranca la carrera, después del `start()` de cada `Galgo`, se añadió un bucle `for (Galgo g : galgos) { g.join(); }` para esperar a que todos terminen antes de mostrar el diálogo de resultados (`winnerDialog`). Así se evita mostrar resultados prematuros.
+
+2) Inconsistencias y regiones críticas
+- Problemas observados al correr múltiples veces:
+    - Posiciones de llegada duplicadas o saltadas.
+    - Ganador no siempre coherente con la primera posición registrada.
+- Regiones críticas identificadas:
+    - Lectura e incremento de `ultimaPosicionAlcanzada` (operación compuesta que debe ser atómica).
+    - Asignación del `ganador` (solo debe hacerse una vez y por el primer hilo que llegue).
+
+3) Sincronización de regiones críticas
+- En `RegistroLlegada.java` se crearon métodos sincronizados:
+    - `synchronized int tomarYAvanzarPosicion()`: lee la posición actual y la incrementa de manera atómica, devolviendo la posición tomada por el galgo.
+    - `synchronized void intentarRegistrarGanador(String nombre, int posicion)`: si `posicion == 1` y no hay ganador aún, fija el ganador.
+- En `Galgo.java`, al cruzar la meta, se invoca:
+    - `int ubicacion = regl.tomarYAvanzarPosicion();`
+    - `regl.intentarRegistrarGanador(this.getName(), ubicacion);`
+- Resultado: orden de llegada consistente, sin duplicados, y ganador estable.
+
+4) Pausa y continuar con wait/notifyAll
+- En `RegistroLlegada.java` se añadió un monitor común y estado `pausado` con métodos:
+    - `pausar()` y `continuar()` para cambiar el estado y notificar a todos los hilos.
+    - `esperarSiPausado()` que bloquea en un `while (pausado) wait()` hasta reanudación.
+- En `Galgo.java` se llama `regl.esperarSiPausado()` al inicio de cada iteración del bucle de carrera para obedecer el estado de pausa.
+- En `MainCanodromo.java` se conectaron los botones:
+    - ‘Stop’ -> `reg.pausar()`
+    - ‘Continue’ -> `reg.continuar()`
+- Resultado: la carrera se detiene casi inmediatamente al pulsar Stop y se reanuda al pulsar Continue, sin busy-wait ni bloqueos de la UI.
+
+Cómo ejecutar Parte II
+
+- Construcción y ejecución:
+    - Asegúrese de usar Java 8+ para compilar. Si el compilador rechaza source/target 1.7, ajuste el `pom.xml` a 1.8.
+
+    mvn -DskipTests package -f parte2/pom.xml
+    mvn exec:java -Dexec.mainClass=arsw.threads.MainCanodromo -f parte2/pom.xml
+
+- Comportamiento esperado:
+    - La ventana inicia la carrera al presionar Start. Los resultados aparecen solo al finalizar todos los hilos.
+    - El ranking en consola no presenta posiciones duplicadas ni inconsistentes. El ganador corresponde a la posición 1.
+    - Los botones Stop/Continue pausan y reanudan a todos los galgos correctamente.
+
+Notas y verificación
+
+- Se verificó la concurrencia ejecutando múltiples veces la Parte II: no se observaron posiciones repetidas ni cambios de ganador tras la sincronización.
+- La UI permanece fluida porque el arranque de la carrera y la espera con `join()` suceden en un hilo en segundo plano (no en el EDT).
 
 
 ## Criterios de evaluación
